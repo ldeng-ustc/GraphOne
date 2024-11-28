@@ -542,7 +542,8 @@ void plaingraph_manager_t<T>::run_pr()
     pgraph_t<T>* pgraph = (pgraph_t<T>*)get_plaingraph();
     snap_t<T>* snaph = create_static_view(pgraph, STALE_MASK|V_CENTRIC);
     
-    mem_pagerank<T>(snaph, 10);
+    // mem_pagerank<T>(snaph, 10);
+    pr_gapbs<T>(snaph, 10);
     delete_static_view(snaph);
 }
 
@@ -552,7 +553,7 @@ void plaingraph_manager_t<T>::run_cc()
     pgraph_t<T>* pgraph = (pgraph_t<T>*)get_plaingraph();
     snap_t<T>* snaph = create_static_view(pgraph, STALE_MASK|V_CENTRIC);
     
-    test_connected_components<T>(snaph, 2, false);
+    cc_gapbs<T>(snaph, 2, false);
     delete_static_view(snaph);
 }
 

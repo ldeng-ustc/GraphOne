@@ -1672,7 +1672,7 @@ void PrintCompStats(vid_t* comp, vid_t v_count) {
 }
 
 template<class T>
-void test_connected_components(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = false) {
+void cc_gapbs(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = false) {
     double st = mywtime();
 
     vid_t v_count = snaph->get_vcount();
@@ -1801,4 +1801,98 @@ void test_connected_components(gview_t<T>* snaph, index_t neighbor_rounds = 0, b
         PrintCompStats(comp, v_count);
     double t4 = mywtime();
     printf("Logging time = %f\n", t4 - t3);
+}
+
+
+template<class T>
+void pr_gapbs(gview_t<T>* snaph, int max_iters, double epsilon=0, bool logging_enabled = false)
+{
+    using NodeID = vid_t;
+    using ScoreT = float;
+    vid_t v_count = snaph->get_vcount();
+    const float kDamp = 0.85;
+    const ScoreT init_score = 1.0f / v_count;
+    const ScoreT base_score = (1.0f - kDamp) / v_count;
+
+
+
+	float* scores = 0 ;
+	float* outgoing_contrib = 0;
+	
+    double start = mywtime();
+    
+    scores  = (float*)mmap(NULL, sizeof(float)*v_count, PROT_READ|PROT_WRITE,
+                            MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB|MAP_HUGE_2MB, 0, 0 );
+    if (MAP_FAILED == scores) {
+        cout << "Huge page alloc failed for rank array" << endl;
+        scores = (float*)calloc(v_count, sizeof(float));
+    }
+    
+    outgoing_contrib  = (float*)mmap(NULL, sizeof(float)*v_count, PROT_READ|PROT_WRITE,
+                            MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB|MAP_HUGE_2MB, 0, 0 );
+    if (MAP_FAILED == outgoing_contrib) {
+        cout << "Huge page alloc failed for prior rank array" << endl;
+        outgoing_contrib = (float*)calloc(v_count, sizeof(float));
+    }
+    
+    std::fill_n(scores, v_count, init_score);
+	
+    #pragma omp parallel for
+    for (NodeID n=0; n < v_count; n++) {
+        outgoing_contrib[n] = init_score / snaph->get_degree_out(n);
+    }
+
+
+	//let's run the pagerank
+	for (int iter=0; iter < max_iters; iter++) {
+        double start1 = mywtime();
+        double error = 0;
+
+        #pragma omp parallel 
+        {
+            sid_t sid;
+            degree_t delta_degree = 0;
+            degree_t nebr_count = 0;
+            degree_t local_degree = 0;
+
+            delta_adjlist_t<T>* delta_adjlist;
+            T* local_adjlist = 0;
+            
+            #pragma omp for schedule (dynamic, 4096) reduction(+:error)
+            for (vid_t u = 0; u < v_count; u++) {
+                delta_adjlist = snaph->get_nebrs_archived_in(u);
+                if (0 == delta_adjlist) continue;
+                
+                nebr_count = snaph->get_degree_in(u);
+                float incoming_total = 0;
+                
+                //traverse the delta adj list
+                delta_degree = nebr_count;
+                while (delta_adjlist != 0 && delta_degree > 0) {
+                    local_adjlist = delta_adjlist->get_adjlist();
+                    local_degree = delta_adjlist->get_nebrcount();
+                    degree_t i_count = min(local_degree, delta_degree);
+                    for (degree_t i = 0; i < i_count; ++i) {
+                        sid = get_sid(local_adjlist[i]);
+                        incoming_total += outgoing_contrib[sid];
+                    }
+                    delta_adjlist = delta_adjlist->get_next();
+                    delta_degree -= local_degree;
+                }
+                ScoreT old_score = scores[u];
+                scores[u] = base_score + kDamp * incoming_total;
+                error += fabs(scores[u] - old_score);
+                outgoing_contrib[u] = scores[u] / snaph->get_degree_out(u);
+            }
+        }
+
+        if(error < epsilon)
+            break;
+        double end1 = mywtime();
+        cout << "Iteration Time = " << end1 - start1 << endl;
+    }
+    double end = mywtime();
+
+	cout << "PR Time = " << end - start << endl;
+	cout << endl;
 }
