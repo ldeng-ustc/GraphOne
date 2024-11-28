@@ -9,7 +9,8 @@ using std::min;
 typedef float rank_t; 
 extern float qthread_dincr(float* sum, float value);
 extern double qthread_doubleincr(double *operand, double incr);
-void print_bfs_summary(uint8_t* status, uint8_t level, vid_t v_count);
+template<class T, class U>
+void print_bfs_summary(T* status, U level, vid_t v_count);
 
 template<class T>
 void
@@ -659,9 +660,9 @@ void mem_bfs_simple(gview_t<T>* snaph,
     print_bfs_summary(status, level, v_count);
 }
 
-template<class T>
+template<class T, class StatusType>
 void mem_bfs(gview_t<T>* snaph,
-        uint8_t* status, sid_t root)
+        StatusType* status, sid_t root)
 {
     int				level      = 1;
 	int				top_down   = 1;
@@ -684,6 +685,7 @@ void mem_bfs(gview_t<T>* snaph,
 
             delta_adjlist_t<T>* delta_adjlist;;
             T* local_adjlist = 0;
+            // std::cout << "vcount: " << v_count << std::endl;
 		    
             if (top_down) {
                 #pragma omp for nowait
@@ -711,6 +713,9 @@ void mem_bfs(gview_t<T>* snaph,
                         }
                         delta_adjlist = delta_adjlist->get_next();
                         delta_degree -= local_degree;
+                        if(v % 13777773 ==0 && delta_degree != 0) {
+                            cout << v << ": delta_degree = " << delta_degree << endl;
+                        }
                     }
 				}
 			} else {//bottom up
@@ -1555,7 +1560,8 @@ void mem_bfs_snb(gview_t<T>* viewh,
     print_bfs_summary(status, level, v_count);
 }
 
-inline void print_bfs_summary(uint8_t* status, uint8_t level, vid_t v_count)
+template<class T, class U>
+inline void print_bfs_summary(T* status, U level, vid_t v_count)
 {
     for (int l = 1; l < level; ++l) {
         vid_t vid_count = 0;
@@ -1566,4 +1572,233 @@ inline void print_bfs_summary(uint8_t* status, uint8_t level, vid_t v_count)
         }
         cout << " Level = " << l << " count = " << vid_count << endl;
     }
+}
+
+
+bool compare_and_swap(vid_t &x, vid_t &old_val, vid_t &new_val) {
+    return __sync_bool_compare_and_swap(reinterpret_cast<uint32_t*>(&x),
+                                    reinterpret_cast<const uint32_t&>(old_val),
+                                    reinterpret_cast<const uint32_t&>(new_val));
+}
+
+// Returns k pairs with largest values from list of key-value pairs
+template<typename KeyT, typename ValT>
+std::vector<std::pair<ValT, KeyT>> TopK(
+    const std::vector<std::pair<KeyT, ValT>> &to_sort, size_t k) {
+    std::vector<std::pair<ValT, KeyT>> top_k;
+    ValT min_so_far = 0;
+    for (auto kvp : to_sort) {
+        if ((top_k.size() < k) || (kvp.second > min_so_far)) {
+            top_k.push_back(std::make_pair(kvp.second, kvp.first));
+            std::sort(top_k.begin(), top_k.end(),
+                        std::greater<std::pair<ValT, KeyT>>());
+            if (top_k.size() > k)
+                top_k.resize(k);
+            min_so_far = top_k.back().first;
+        }
+    }
+  return top_k;
+}
+
+// Place nodes u and v in same component of lower component ID
+void Link(vid_t u, vid_t v, vid_t* comp) {
+  vid_t p1 = comp[u];
+  vid_t p2 = comp[v];
+  while (p1 != p2) {
+    vid_t high = p1 > p2 ? p1 : p2;
+    vid_t low = p1 + (p2 - high);
+    vid_t p_high = comp[high];
+    // Was already 'low' or succeeded in writing 'low'
+    if ((p_high == low) ||
+        (p_high == high && compare_and_swap(comp[high], high, low)))
+      break;
+    p1 = comp[comp[high]];
+    p2 = comp[low];
+  }
+}
+
+// Reduce depth of tree for each component to 1 by crawling up parents
+void Compress(vid_t v_count, vid_t* comp) {
+    #pragma omp parallel for schedule(dynamic, 16384)
+    for (vid_t n = 0; n < v_count; n++) {
+        while (comp[n] != comp[comp[n]]) {
+            comp[n] = comp[comp[n]];
+        }
+    }
+}
+
+vid_t SampleFrequentElement(vid_t* comp, vid_t v_count, index_t num_samples = 1024) {
+  std::unordered_map<vid_t, int> sample_counts(32);
+  using kvp_type = std::unordered_map<vid_t, int>::value_type;
+  // Sample elements from 'comp'
+  std::mt19937 gen;
+  std::uniform_int_distribution<vid_t> distribution(0, v_count - 1);
+  for (vid_t i = 0; i < num_samples; i++) {
+    vid_t n = distribution(gen);
+    sample_counts[comp[n]]++;
+  }
+  // Find most frequent element in samples (estimate of most frequent overall)
+  auto most_frequent = std::max_element(
+    sample_counts.begin(), sample_counts.end(),
+    [](const kvp_type& a, const kvp_type& b) { return a.second < b.second; });
+  float frac_of_graph = static_cast<float>(most_frequent->second) / num_samples;
+  std::cout
+    << "Skipping largest intermediate component (ID: " << most_frequent->first
+    << ", approx. " << static_cast<int>(frac_of_graph * 100)
+    << "% of the graph)" << std::endl;
+  return most_frequent->first;
+}
+
+
+void PrintCompStats(vid_t* comp, vid_t v_count) {
+    using NodeID = vid_t;
+    printf("\n");
+    std::unordered_map<NodeID, NodeID> count;
+    for(NodeID i=0; i<v_count; i++) {
+        NodeID comp_i = comp[i];
+        count[comp_i] += 1;
+    }
+    int k = 5;
+    std::vector<std::pair<NodeID, NodeID>> count_vector;
+    count_vector.reserve(count.size());
+    for (auto kvp : count)
+        count_vector.push_back(kvp);
+    std::vector<std::pair<NodeID, NodeID>> top_k = TopK(count_vector, k);
+    k = std::min(k, static_cast<int>(top_k.size()));
+    printf("%d biggest clusters\n", k);
+    for(auto kvp : top_k)
+        printf("%d:%d\n", kvp.second, kvp.first);
+    printf("There are %d components\n", count.size());
+}
+
+template<class T>
+void test_connected_components(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = false) {
+    double st = mywtime();
+
+    vid_t v_count = snaph->get_vcount();
+    vid_t* comp = (vid_t*)calloc(sizeof(vid_t), v_count);
+    
+
+    // Initialize each node to a single-node self-pointing tree
+    #pragma omp parallel for
+    for (vid_t v = 0; v < v_count; v++) {
+        comp[v] = v;
+    }
+
+    double t1 = mywtime();
+    printf("Initialization time = %f\n", t1 - st);
+
+    // Process a sparse sampled subgraph first for approximating components.
+    // Sample by processing a fixed number of neighbors for each node (see paper)
+    
+
+    for (index_t r = 0; r < neighbor_rounds; ++r) {
+        #pragma omp parallel for schedule(dynamic, 16384)
+        for (vid_t u = 0; u < v_count; u++) {
+            degree_t      delta_degree = 0;
+            degree_t        nebr_count = 0;
+            degree_t      local_degree = 0;
+            
+            delta_adjlist_t<T>* delta_adjlist;
+            T* local_adjlist = 0;
+
+            degree_t d = 0;
+            delta_adjlist = snaph->get_nebrs_archived_out(u);
+            nebr_count = snaph->get_degree_out(u);
+            if(nebr_count < r) {
+                continue;
+            }
+            if (0 != delta_adjlist && nebr_count != 0) {
+                delta_degree = nebr_count;
+                while (delta_adjlist != 0 && delta_degree > 0 && d <= r) {
+                    local_adjlist = delta_adjlist->get_adjlist();
+                    local_degree = delta_adjlist->get_nebrcount();
+                    degree_t i_count = min(local_degree, delta_degree);
+                    for (degree_t i = 0; i < i_count; ++i) {
+                        if(d == r) {
+                            sid_t v = get_sid(local_adjlist[i]);
+                            // printf("Linking %d and %d\n", u, v);
+                            Link(u, v, comp);
+                            d++;
+                            break;
+                        }
+                        d++;
+                    }
+                    delta_adjlist = delta_adjlist->get_next();
+                    delta_degree -= local_degree;
+                }
+            }
+        }
+        Compress(v_count, comp);
+    }
+
+    vid_t c = SampleFrequentElement(comp, v_count);
+    double t2 = mywtime();
+    printf("Sampling time = %f\n", t2 - t1);
+
+
+    #pragma omp parallel for schedule(dynamic, 16384)
+    for (vid_t u = 0; u < v_count; u++) {
+        if (comp[u] == c) continue;
+
+        degree_t      delta_degree = 0;
+        degree_t        nebr_count = 0;
+        degree_t      local_degree = 0;
+        degree_t      d = 0;
+        
+        delta_adjlist_t<T>* delta_adjlist;
+        T* local_adjlist = 0;
+
+        delta_adjlist = snaph->get_nebrs_archived_out(u);
+        nebr_count = snaph->get_degree_out(u);
+        if (0 != delta_adjlist && nebr_count != 0) {
+            delta_degree = nebr_count;
+            while (delta_adjlist != 0 && delta_degree > 0) {
+                local_adjlist = delta_adjlist->get_adjlist();
+                local_degree = delta_adjlist->get_nebrcount();
+                degree_t i_count = min(local_degree, delta_degree);
+                for (degree_t i = 0; i < i_count; ++i) {
+                    if(d > neighbor_rounds) {
+                        vid_t v = get_sid(local_adjlist[i]);
+                        Link(u, v, comp);
+                    }
+                    d++;
+                }
+                delta_adjlist = delta_adjlist->get_next();
+                delta_degree -= local_degree;
+            }
+        }
+
+        d = 0;
+        // To support directed graphs, process reverse graph completely
+        delta_adjlist = snaph->get_nebrs_archived_in(u);
+        nebr_count = snaph->get_degree_in(u);
+        if (0 != delta_adjlist && nebr_count != 0) {
+            delta_degree = nebr_count;
+            while (delta_adjlist != 0 && delta_degree > 0) {
+                local_adjlist = delta_adjlist->get_adjlist();
+                local_degree = delta_adjlist->get_nebrcount();
+                degree_t i_count = min(local_degree, delta_degree);
+                for (degree_t i = 0; i < i_count; ++i) {
+                    if(d > neighbor_rounds) {
+                        vid_t v = get_sid(local_adjlist[i]);
+                        Link(u, v, comp);
+                    }
+                    d++;
+                }
+                delta_adjlist = delta_adjlist->get_next();
+                delta_degree -= local_degree;
+            }
+        }
+    }
+    // Finally, 'compress' for final convergence
+    Compress(v_count, comp);
+
+    double t3 = mywtime();
+    printf("Connected components time = %f\n", t3 - t2);
+
+    if(logging)
+        PrintCompStats(comp, v_count);
+    double t4 = mywtime();
+    printf("Logging time = %f\n", t4 - t3);
 }

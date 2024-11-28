@@ -4,6 +4,9 @@
 #include <dirent.h>
 #include <assert.h>
 #include <string>
+#include <vector>
+#include <unordered_map>
+#include <random>
 #include <unistd.h>
 
 #include "graph_view.h"
@@ -64,6 +67,7 @@ class plaingraph_manager_t {
     
     void run_pr_simple();
     void run_pr();
+    void run_cc();
     void run_prd();
     void run_bfs(sid_t root = 1);
     void run_bfs_snb(sid_t root = 1);
@@ -478,12 +482,13 @@ void plaingraph_manager_t<T>::prep_graph2(const string& idirname, const string& 
         g->create_threads(true, false);
     }
     
+    double update = 0.0;
     //Batch and Make Graph
     double start = mywtime();
     if (0 == _source) {//text
         read_idir_text2(idirname, odirname, ugraph, parsebuf_and_insert);
     } else {//binary
-        read_idir_text2(idirname, odirname, ugraph, buf_and_insert);
+        update = read_idir_text2(idirname, odirname, ugraph, buf_and_insert);
     }
     double end = mywtime();
     cout << "Batch Update Time = " << end - start << endl;
@@ -492,9 +497,11 @@ void plaingraph_manager_t<T>::prep_graph2(const string& idirname, const string& 
         //Wait for make and durable graph
         waitfor_archive_durable(start);
     } else {
+        start = mywtime();
         g->waitfor_archive();
         end = mywtime();
         cout << "Make graph time = " << end - start << endl;
+        cout << EXPOUT "Ingest: " << end - start + update << endl;
     }
     
     if (_persist) g->type_store(odirname);
@@ -535,7 +542,17 @@ void plaingraph_manager_t<T>::run_pr()
     pgraph_t<T>* pgraph = (pgraph_t<T>*)get_plaingraph();
     snap_t<T>* snaph = create_static_view(pgraph, STALE_MASK|V_CENTRIC);
     
-    mem_pagerank<T>(snaph, 5);
+    mem_pagerank<T>(snaph, 10);
+    delete_static_view(snaph);
+}
+
+template <class T>
+void plaingraph_manager_t<T>::run_cc() 
+{
+    pgraph_t<T>* pgraph = (pgraph_t<T>*)get_plaingraph();
+    snap_t<T>* snaph = create_static_view(pgraph, STALE_MASK|V_CENTRIC);
+    
+    test_connected_components<T>(snaph, 2, false);
     delete_static_view(snaph);
 }
 
@@ -564,8 +581,8 @@ void plaingraph_manager_t<T>::run_bfs(sid_t root/*=1*/)
     end = mywtime();
     cout << "static View creation = " << end - start << endl;    
     
-    uint8_t* level_array = 0;
-    level_array = (uint8_t*) calloc(snaph->get_vcount(), sizeof(uint8_t));
+    uint16_t* level_array = 0;
+    level_array = (uint16_t*) calloc(snaph->get_vcount(), sizeof(uint16_t));
     start = mywtime();
     mem_bfs<T>(snaph, level_array, root);
     end = mywtime();

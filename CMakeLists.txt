@@ -38,3 +38,10 @@ set_target_properties(graphone64 PROPERTIES  COMPILE_FLAGS ${COMPILE_FLAGS64}
 #target_link_libraries(graphone64 src64 onedata64 test64)
 target_link_libraries(graphone64 src64 onedata64 test64 -ltbb)
 #target_link_libraries(graphone64 src64 onedata64 test64 -ltbb -ltcmalloc_minimal)
+
+
+
+add_executable(graphone-bench graphone_bench.cpp)
+set_target_properties(graphone-bench PROPERTIES  COMPILE_FLAGS ${COMPILE_FLAGS32}
+                      LINK_FLAGS ${LINK_FLAGS_COMMON})
+target_link_libraries(graphone-bench src32 onedata32 test32 -ltbb)

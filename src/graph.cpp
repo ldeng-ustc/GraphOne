@@ -254,6 +254,7 @@ void graph::swap_log_buffer()
 
 void graph::waitfor_archive()
 {
+    cout << "waiting for archive, cf_count:" << cf_count << endl;
     index_t* markers = (index_t*)calloc(cf_count, sizeof(index_t));
     for (int i = 0; i < cf_count; i++) {
         markers[i] = cf_info[i]->create_marker(0);

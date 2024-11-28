@@ -1,5 +1,5 @@
 #include <iostream>
-
+#include <span>
 #include "plain_to_edge.h"
 
 #include "stream_analytics.h"
@@ -1269,9 +1269,41 @@ void test_serial_stream(const string& idir, const string& odir,
     pthread_join(sstreamh->thread, &ret);
 }
 
+template <class T>
+void basic_benchmark(vid_t v_count1, const string& idir, const string& odir)
+{
+    plaingraph_manager_t<T> manager;
+    manager.schema(_dir);
+    //do some setup for plain graphs
+    manager.setup_graph(v_count1);
+    manager.prep_graph2(idir, odir); 
+    // manager.prep_graph_adj(idir, odir);
+
+    double st = mywtime();
+    manager.run_bfs();
+    double ts1 = mywtime();
+    manager.run_pr();
+    double ts2 = mywtime();
+    manager.run_cc();
+    double ts3 = mywtime();
+
+
+    double t_bfs = ts1 - st;
+    double t_pr = ts2 - ts1;
+    double t_cc = ts3 - ts2;
+
+    cout << EXPOUT "BFS: " << t_bfs << "s" << endl;
+    cout << EXPOUT "PR: " << t_pr << "s" << endl;
+    cout << EXPOUT "CC: " << t_cc << "s" << endl;
+}
+
+
 void plain_test(vid_t v_count1, const string& idir, const string& odir, int job)
 {
     switch (job) {
+        case 99:
+            basic_benchmark<dst_id_t>(v_count1, idir, odir);
+            break;
         //plaingrah benchmark testing    
         case 0: 
             test_ingestion<dst_id_t>(idir, odir);

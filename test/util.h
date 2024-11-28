@@ -178,8 +178,10 @@ void read_idir_text(const string& idirname, const string& odirname, pgraph_t<T>*
     return;
 }
 
+#define EXPOUT "[EXPOUT]"
+
 template <class T>
-void read_idir_text2(const string& idirname, const string& odirname, pgraph_t<T>* pgraph,
+double read_idir_text2(const string& idirname, const string& odirname, pgraph_t<T>* pgraph,
                     typename callback<T>::parse_fn2_t parse_and_insert)
 {
     
@@ -192,14 +194,16 @@ void read_idir_text2(const string& idirname, const string& odirname, pgraph_t<T>
     }
     double end = mywtime();
     cout << "  Read/alloc time = " << end - start << endl;
+    cout << EXPOUT "Load: " << end - start << endl;
     
     start = mywtime(); 
     index_t line = parse_and_insert(buf, pgraph, total_size);
     end = mywtime();
     //vid_t vid = g->get_type_scount();
     //cout << "vertex count " << vid << endl;
-    cout << "  Batching time = " << end - start << " Edges = " << line << endl;
-    return;
+    cout << "  Batching time = " << end - start << "s" << " Edges = " << line << endl;
+    // cout << EXPOUT "Update: " << end - start << "s" << endl;
+    return end - start;
 }
 
 template <class T>

@@ -199,6 +199,7 @@ status_t cfinfo_t::create_snapshot()
         ++work_done;
     }
     if (work_done != 0) {
+        // printf("Snapshot created\n");
         return eOK;
     }
     return eNoWork;

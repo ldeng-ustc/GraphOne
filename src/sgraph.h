@@ -168,12 +168,12 @@ status_t pgraph_t<T>::batch_edge(edgeT_t<T>& edge)
     }
 
     index += 1;
-    index_t size = ((index - blog->blog_marker) & BATCH_MASK);
+    index_t size = ((index - blog->blog_marker) & BATCH_MASK);  // mod 2^16
     
     //inform archive thread about threshold being crossed
-    if ((0 == size) && (index != blog->blog_marker)) {
+    if ((0 == size) && (index != blog->blog_marker)) {  // (index - prev_marker) mod 2^16 == 0 && not 0
         create_marker(index);
-        //cout << "Will create a snapshot now " << endl;
+        // cout << "Will create a snapshot now: " << index << " " << index1 << endl;
         ret = eEndBatch;
     } 
     return ret; 
