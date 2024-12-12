@@ -713,9 +713,9 @@ void mem_bfs(gview_t<T>* snaph,
                         }
                         delta_adjlist = delta_adjlist->get_next();
                         delta_degree -= local_degree;
-                        if(v % 13777773 ==0 && delta_degree != 0) {
-                            cout << v << ": delta_degree = " << delta_degree << endl;
-                        }
+                        // if(v % 13777773 ==0 && delta_degree != 0) {
+                        //     cout << v << ": delta_degree = " << delta_degree << endl;
+                        // }
                     }
 				}
 			} else {//bottom up
@@ -795,7 +795,7 @@ void mem_bfs(gview_t<T>* snaph,
 		
     double end1 = mywtime();
     cout << "BFS root = "<< root << "Time = " << end1 - start1 << endl;
-    print_bfs_summary(status, level, v_count);
+    // print_bfs_summary(status, level, v_count);
 }
 
 template<class T>
@@ -1557,7 +1557,7 @@ void mem_bfs_snb(gview_t<T>* viewh,
 		
     double end1 = mywtime();
     cout << "BFS Time = " << end1 - start1 << endl;
-    print_bfs_summary(status, level, v_count);
+    // print_bfs_summary(status, level, v_count);
 }
 
 template<class T, class U>

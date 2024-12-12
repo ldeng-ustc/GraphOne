@@ -1280,7 +1280,10 @@ void basic_benchmark(vid_t v_count1, const string& idir, const string& odir)
     // manager.prep_graph_adj(idir, odir);
 
     double st = mywtime();
-    manager.run_bfs();
+    for(size_t i = 0; i < 20; i++) {
+        manager.run_bfs(i);
+    }
+    // manager.run_bfs();
     double ts1 = mywtime();
     manager.run_pr();
     double ts2 = mywtime();
