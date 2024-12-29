@@ -777,12 +777,12 @@ void mem_bfs(gview_t<T>* snaph,
         
         
 		double end = mywtime();
-	
-		cout << "Top down = " << top_down
-		     << " Level = " << level
-             << " Frontier Count = " << frontier
-		     << " Time = " << end - start
-		     << endl;
+        if(root == 1)
+            cout << "Top down = " << top_down
+                << " Level = " << level
+                << " Frontier Count = " << frontier
+                << " Time = " << end - start
+                << endl;
 
         //Point is to simulate bottom up bfs, and measure the trade-off    
         if ((frontier >= 0.002*v_count) && ( 0 == snaph->is_unidir())){ // || level == 2)
@@ -1672,7 +1672,7 @@ void PrintCompStats(vid_t* comp, vid_t v_count) {
 }
 
 template<class T>
-void cc_gapbs(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = false) {
+void cc_gapbs(gview_t<T>* snaph, index_t neighbor_rounds = 2, bool logging = false) {
     double st = mywtime();
 
     vid_t v_count = snaph->get_vcount();
@@ -1692,7 +1692,8 @@ void cc_gapbs(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = fal
     // Sample by processing a fixed number of neighbors for each node (see paper)
     
 
-    for (index_t r = 0; r < neighbor_rounds; ++r) {
+    // for (index_t r = 0; r < neighbor_rounds; ++r) {
+    size_t r = neighbor_rounds;
         #pragma omp parallel for schedule(dynamic, 16384)
         for (vid_t u = 0; u < v_count; u++) {
             degree_t      delta_degree = 0;
@@ -1705,9 +1706,7 @@ void cc_gapbs(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = fal
             degree_t d = 0;
             delta_adjlist = snaph->get_nebrs_archived_out(u);
             nebr_count = snaph->get_degree_out(u);
-            if(nebr_count < r) {
-                continue;
-            }
+
             if (0 != delta_adjlist && nebr_count != 0) {
                 delta_degree = nebr_count;
                 while (delta_adjlist != 0 && delta_degree > 0 && d <= r) {
@@ -1715,14 +1714,15 @@ void cc_gapbs(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = fal
                     local_degree = delta_adjlist->get_nebrcount();
                     degree_t i_count = min(local_degree, delta_degree);
                     for (degree_t i = 0; i < i_count; ++i) {
-                        if(d == r) {
+                        if(d < r) {
                             sid_t v = get_sid(local_adjlist[i]);
                             // printf("Linking %d and %d\n", u, v);
                             Link(u, v, comp);
                             d++;
+                        }
+                        if(d == r) {
                             break;
                         }
-                        d++;
                     }
                     delta_adjlist = delta_adjlist->get_next();
                     delta_degree -= local_degree;
@@ -1730,7 +1730,7 @@ void cc_gapbs(gview_t<T>* snaph, index_t neighbor_rounds = 0, bool logging = fal
             }
         }
         Compress(v_count, comp);
-    }
+    // }
 
     vid_t c = SampleFrequentElement(comp, v_count);
     double t2 = mywtime();

@@ -552,7 +552,6 @@ void plaingraph_manager_t<T>::run_cc()
 {
     pgraph_t<T>* pgraph = (pgraph_t<T>*)get_plaingraph();
     snap_t<T>* snaph = create_static_view(pgraph, STALE_MASK|V_CENTRIC);
-    
     cc_gapbs<T>(snaph, 2, false);
     delete_static_view(snaph);
 }
@@ -580,14 +579,14 @@ void plaingraph_manager_t<T>::run_bfs(sid_t root/*=1*/)
     start = mywtime();
     snap_t<T>* snaph = create_static_view(pgraph1, V_CENTRIC);
     end = mywtime();
-    cout << "static View creation = " << end - start << endl;    
+    // cout << "static View creation = " << end - start << endl;    
     
     uint16_t* level_array = 0;
     level_array = (uint16_t*) calloc(snaph->get_vcount(), sizeof(uint16_t));
     start = mywtime();
     mem_bfs<T>(snaph, level_array, root);
     end = mywtime();
-    cout << "BFS complex = " << end - start << endl;    
+    // cout << "BFS complex = " << end - start << endl;    
     
     free(level_array);
     /*

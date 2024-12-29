@@ -1287,7 +1287,9 @@ void basic_benchmark(vid_t v_count1, const string& idir, const string& odir)
     double ts1 = mywtime();
     manager.run_pr();
     double ts2 = mywtime();
-    manager.run_cc();
+    for(size_t i = 0; i < 10; i++) {
+        manager.run_cc();
+    }
     double ts3 = mywtime();
 
 
