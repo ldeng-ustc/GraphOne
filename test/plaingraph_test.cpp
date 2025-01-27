@@ -1269,6 +1269,27 @@ void test_serial_stream(const string& idir, const string& odir,
     pthread_join(sstreamh->thread, &ret);
 }
 
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <unistd.h>
+long get_rss() {
+    std::ifstream stat_file("/proc/self/stat");
+    std::string line;
+    std::getline(stat_file, line);
+    std::istringstream iss(line);
+    std::string token;
+
+    // 跳过前 23 个字段
+    for (int i = 0; i < 23; ++i) {
+        iss >> token;
+    }
+
+    // 读取第 24 个字段（RSS）
+    iss >> token;
+    return std::stol(token) * sysconf(_SC_PAGESIZE);
+}
+
 template <class T>
 void basic_benchmark(vid_t v_count1, const string& idir, const string& odir)
 {
@@ -1279,11 +1300,13 @@ void basic_benchmark(vid_t v_count1, const string& idir, const string& odir)
     manager.prep_graph2(idir, odir); 
     // manager.prep_graph_adj(idir, odir);
 
+    long rss_ingest = get_rss();
     double st = mywtime();
     for(size_t i = 0; i < 20; i++) {
         manager.run_bfs(i);
     }
     // manager.run_bfs();
+    long rss_bfs = get_rss();
     double ts1 = mywtime();
     manager.run_pr();
     double ts2 = mywtime();
@@ -1300,6 +1323,9 @@ void basic_benchmark(vid_t v_count1, const string& idir, const string& odir)
     cout << EXPOUT "BFS: " << t_bfs << "s" << endl;
     cout << EXPOUT "PR: " << t_pr << "s" << endl;
     cout << EXPOUT "CC: " << t_cc << "s" << endl;
+
+    cout << EXPOUT "RSS_Ingest: " << rss_ingest << endl;
+    cout << EXPOUT "RSS_BFS: " << rss_bfs << endl;
 }
 
 
