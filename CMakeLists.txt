@@ -5,7 +5,7 @@ project(graphone)
 #set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #set(CMAKE_CXX_EXTENSIONS ON)
 
-set(COMPILE_FLAGS_COMMON "-std=c++1y -O3 -g -DOVER_COMMIT -DTBB -DPLAIN_GRAPH -Wno-unused-result -fopenmp")
+set(COMPILE_FLAGS_COMMON "-std=c++1y -O3 -g -DOVER_COMMIT -DTBB -DPLAIN_GRAPH -Wno-unused-result -Wno-changes-meaning -fopenmp")
 #set(COMPILE_FLAGS_COMMON "-std=gnu++1z -g -DOVER_COMMIT -DPLAIN_GRAPH -fopenmp")
 
 set(COMPILE_FLAGS32 "${COMPILE_FLAGS_COMMON} -DB32")
